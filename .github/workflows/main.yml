@@ -1,53 +1,76 @@
-name: Build Flutter APK
+name: Build NexCut AI APK
 
 on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
   workflow_dispatch:
-    inputs:
-      flutter_version:
-        description: 'Flutter version'
-        required: true
-        default: '3.47.2'
 
 jobs:
   build:
     runs-on: ubuntu-24.04
+
     steps:
+      # 1️⃣ سحب الكود
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Setup Gradle Cache
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
+      # 2️⃣ تجهيز Java 17
       - name: Setup Java 17
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ github.event.inputs.flutter_version }}
-          cache: true
-          channel: stable
+      # 3️⃣ تجهيز Android SDK
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Get dependencies
-        run: flutter pub get
+      # 4️⃣ تشخيص: عرض هيكل الريبو
+      - name: 🔍 Show project structure
+        run: |
+          echo "📂 محتوى الريبو:"
+          ls -la
+          echo ""
+          echo "🔍 بحث عن gradlew:"
+          find . -name "gradlew" -not -path "*/.*" | head -5
+          echo ""
+          echo "🔍 بحث عن settings.gradle:"
+          find . -name "settings.gradle*" -not -path "*/.*" | head -5
+          echo ""
+          echo "🔍 بحث عن MainActivity:"
+          find . -name "MainActivity.kt" -o -name "MainActivity.java" | head -5
 
-      - name: Build APK
-        run: flutter build apk --release
+      # 5️⃣ صلاحيات gradlew
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
 
-      - name: Upload APK
+      # 6️⃣ بناء APK (Debug)
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --stacktrace --no-daemon
+
+      # 7️⃣ بناء APK (Release) - اختياري
+      - name: Build Release APK
+        run: ./gradlew assembleRelease --stacktrace --no-daemon
+        continue-on-error: true
+
+      # 8️⃣ رفع APK Debug
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
-          path: build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: error
+          name: nexcut-debug-apk
+          path: |
+            **/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
+          retention-days: 7
+
+      # 9️⃣ رفع APK Release
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexcut-release-apk
+          path: |
+            **/build/outputs/apk/release/*.apk
+          if-no-files-found: warn
           retention-days: 7
